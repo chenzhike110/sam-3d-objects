@@ -259,7 +259,7 @@ class InferencePipelinePointMap(InferencePipeline):
 
         return revised_scale
 
-    def compute_pointmap(self, image, pointmap=None):
+    def compute_pointmap(self, image, pointmap=None, intrinsics=None):
         loaded_image = self.image_to_float(image)
         loaded_image = torch.from_numpy(loaded_image)
         loaded_mask = loaded_image[..., -1]
@@ -278,6 +278,7 @@ class InferencePipelinePointMap(InferencePipeline):
             points_tensor = camera_convention_transform.transform_points(pointmaps)
             intrinsics = output.get("intrinsics", None)
         else:
+            assert intrinsics is not None
             output = {}
             points_tensor = pointmap.to(self.device)
             if loaded_image.shape != points_tensor.shape:
@@ -288,7 +289,6 @@ class InferencePipelinePointMap(InferencePipeline):
                     size=(loaded_image.shape[1], loaded_image.shape[2]),
                     mode="nearest",
                 ).squeeze(0).permute(1, 2, 0)
-            intrinsics = None
         
         # Prepare the point map tensor
         point_map_tensor = {
@@ -313,6 +313,9 @@ class InferencePipelinePointMap(InferencePipeline):
         points_tensor = points_tensor.permute(2, 0, 1)
         points_tensor = self._clip_pointmap(points_tensor, loaded_mask)
         point_map_tensor["pointmap"] = points_tensor
+
+        # Save pointmap to file
+        np.save("pointmap.npy", points_tensor.detach().cpu().numpy())
 
         return point_map_tensor
 
@@ -399,10 +402,11 @@ class InferencePipelinePointMap(InferencePipeline):
         pointmap=None,
         decode_formats=None,
         estimate_plane=False,
+        intrinsics=None,
     ) -> dict:
         image = self.merge_image_and_mask(image, mask)
         with self.device: 
-            pointmap_dict = self.compute_pointmap(image, pointmap)
+            pointmap_dict = self.compute_pointmap(image, pointmap, intrinsics)
             pointmap = pointmap_dict["pointmap"]
             pts = type(self)._down_sample_img(pointmap)
             pts_colors = type(self)._down_sample_img(pointmap_dict["pts_color"])
@@ -505,7 +509,7 @@ class InferencePipelinePointMap(InferencePipeline):
                 **ss_return_dict,
                 **outputs,
                 "pointmap": pts.cpu().permute((1, 2, 0)),  # HxWx3
-                "pointmap_colors": pts_colors.cpu().permute((1, 2, 0)),  # HxWx3
+                "pointmap_colors": pts_colors.cpu().permute((1, 2, 0)),  # HxWx3.
             }
 
     @staticmethod

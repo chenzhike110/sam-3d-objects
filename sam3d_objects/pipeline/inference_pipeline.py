@@ -554,9 +554,9 @@ class InferencePipeline:
                 rendering_engine=self.rendering_engine,
             )
 
-        # glb.export("sample.glb")
         else:
             glb = None
+        glb.export("sample.glb")
 
         outputs["glb"] = glb
 
